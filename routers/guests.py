@@ -1,0 +1,64 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from database import get_db
+from models import GuestDB
+from schemas import Guest, GuestResponse
+
+router = APIRouter(
+    prefix="/guest",
+    tags=["Guests"]
+)
+
+@router.get("/", response_model=list[GuestResponse])
+def get_guests(db: Session = Depends(get_db)):
+    guests = db.query(GuestDB).all()
+    return guests
+
+@router.post("/", status_code=201, response_model=GuestResponse)
+def create_guest(guest: Guest, db: Session = Depends(get_db)):
+    guest_db = GuestDB(
+        name=guest.name,
+        age=guest.age,
+        rsvp=guest.rsvp
+    )
+    db.add(guest_db)
+    db.commit()
+    db.refresh(guest_db)
+    return guest_db
+
+@router.get("/{guest_id}", response_model=GuestResponse)
+def get_single_guest(guest_id: int, db: Session = Depends(get_db)):
+    guest = db.query(GuestDB).filter(GuestDB.id == guest_id).first()
+    if guest is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Guest not found"
+        )
+    return guest
+
+@router.put("/{guest_id}", response_model=GuestResponse)
+def update_guest(guest_id: int, guest: Guest, db: Session = Depends(get_db)):
+    guest_db = db.query(GuestDB).filter(GuestDB.id == guest_id).first()
+    if guest_db is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Guest not found"
+        )
+    guest_db.name = guest.name
+    guest_db.age = guest.age
+    guest_db.rsvp = guest.rsvp
+    db.commit()
+    db.refresh(guest_db)
+    return guest_db
+
+@router.delete("/{guest_id}", status_code=204)
+def delete_guest(guest_id: int, db: Session = Depends(get_db)):
+    guest_db = db.query(GuestDB).filter(GuestDB.id == guest_id).first()
+    if guest_db is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Guest not found"
+        )
+    db.delete(guest_db)
+    db.commit()
