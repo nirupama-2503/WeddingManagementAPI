@@ -1,7 +1,8 @@
 
 
 from database import Base, engine, get_db
-from sqlalchemy import Column, Integer, String, Float
+from sqlalchemy import Column, Integer, String, Float, ForeignKey
+from sqlalchemy.orm import relationship
 
 class GuestDB(Base):
     __tablename__ = "guests"
@@ -23,6 +24,7 @@ class EventDB(Base):
     venue = Column(String, nullable=False)
     description = Column(String, nullable=False)
     status = Column(String, nullable=False)
+    expenses = relationship("ExpenseDB",back_populates="event")
 
 Base.metadata.create_all(bind=engine)
 
@@ -48,5 +50,8 @@ class ExpenseDB(Base):
     category = Column(String, nullable=False)
     date = Column(String, nullable=False)
     status = Column(String, nullable=False)
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=False)
+    event = relationship("EventDB", back_populates="expenses")
+
 
 Base.metadata.create_all(bind=engine)

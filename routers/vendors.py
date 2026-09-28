@@ -26,8 +26,13 @@ def create_vendor(vendor: Vendor, db: Session = Depends(get_db)):
     return vendor_db
 
 @router.get("/", status_code=200, response_model=list[VendorResponse])
-def get_vendors(db: Session = Depends(get_db)):
-    vendors = db.query(VendorDB).all()
+def get_vendors(service_type: str | None = None, db: Session = Depends(get_db)):
+    query = db.query(VendorDB)
+
+    if service_type:
+        query = query.filter(VendorDB.service_type == service_type)
+
+    vendors = query.all()
     return vendors      
 
 @router.get("/{vendor_id}", status_code=200, response_model=VendorResponse)

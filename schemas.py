@@ -50,8 +50,16 @@ class Expense(BaseModel):
     category: str
     date: str
     status: str
+    event_id: int
 
 class ExpenseResponse(Expense):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+class ExpensetotalResponse(BaseModel):
+    total_expenses: float
+
+
+class EventStatusUpdate(BaseModel):
+    status : str

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import EventDB
-from schemas import Event, EventResponse
+from schemas import Event, EventResponse, EventStatusUpdate
 
 router = APIRouter(
         prefix="/events",
@@ -26,9 +26,13 @@ def create_event(event: Event, db: Session = Depends(get_db)):
     return event_db
 
 @router.get("/",status_code=200,response_model=list[EventResponse])
-def get_events(db: Session = Depends(get_db)):
-    events = db.query(EventDB).all()
-    return events
+def get_events(status: str | None = None, db: Session = Depends(get_db)):
+    query = db.query(EventDB)
+
+    if status:
+        query = query.filter(EventDB.status == status)
+
+    return query.all()
 
 @router.get("/{event_id}", status_code=200, response_model=EventResponse)
 def get_single_event(event_id: int, db: Session = Depends(get_db)):
@@ -68,3 +72,21 @@ def delete_event(event_id: int, db: Session = Depends(get_db)):
         )
     db.delete(event_db)
     db.commit()
+
+
+@router.patch("/{event_id}", status_code=200, response_model=EventResponse)
+def update_event_status(event_id: int, status_update: EventStatusUpdate, db: Session = Depends(get_db)):
+    event_db = db.query(EventDB).filter(EventDB.id == event_id).first()
+    if event_db is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Event not found"
+        )
+    event_db.status = status_update.status
+    db.commit()
+    db.refresh(event_db)
+    return event_db
+
+
+
+

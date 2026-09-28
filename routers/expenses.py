@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import ExpenseDB
-from schemas import Expense, ExpenseResponse
+from schemas import Expense, ExpenseResponse, ExpensetotalResponse
 
 router = APIRouter(
     prefix="/expense",
@@ -71,3 +72,7 @@ def delete_expense(expense_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 
+@router.get("/total", status_code=200, response_model=ExpensetotalResponse)
+def get_total_expenses(db: Session = Depends(get_db)):
+    total_expenses = db.query(func.sum(ExpenseDB.amount)).scalar()
+    return {"total_expenses": total_expenses}
