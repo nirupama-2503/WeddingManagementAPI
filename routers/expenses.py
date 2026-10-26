@@ -3,7 +3,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import ExpenseDB
+from models import EventDB, ExpenseDB
 from schemas import Expense, ExpenseResponse, ExpensetotalResponse
 
 router = APIRouter(
@@ -18,8 +18,18 @@ def create_expense(expense: Expense, db: Session = Depends(get_db)):
         amount=expense.amount,
         category=expense.category,
         date=expense.date,
-        status=expense.status
+        status=expense.status,
+        event_id=expense.event_id
     )
+
+    event_id = expense.event_id
+    event = db.query(EventDB).filter(EventDB.id == event_id).first()
+
+    if event is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Event not found"
+        )
 
     db.add(expense_db)
     db.commit()
@@ -40,6 +50,7 @@ def get_single_expense(expense_id: int, db: Session = Depends(get_db)):
             detail="Expense not found"
         )
     return expense
+
 
 @router.put("/{expense_id}", status_code=200, response_model=ExpenseResponse)
 def update_expense(expense_id: int, expense: Expense, db: Session = Depends(get_db)):

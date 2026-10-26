@@ -1,8 +1,17 @@
 
 
 from database import Base, engine, get_db
-from sqlalchemy import Column, Integer, String, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Table, UniqueConstraint
 from sqlalchemy.orm import relationship
+
+
+guest_events = Table(
+    "guest_events",
+    Base.metadata,
+    Column("guest_id", ForeignKey("guests.id"), primary_key=True),
+    Column("event_id", ForeignKey("events.id"), primary_key=True)
+)
+
 
 class GuestDB(Base):
     __tablename__ = "guests"
@@ -11,8 +20,7 @@ class GuestDB(Base):
     name = Column(String, nullable=False)
     age = Column(Integer, nullable=False)
     rsvp = Column(String, nullable=False)
-
-Base.metadata.create_all(bind=engine)
+    events = relationship("EventDB",secondary=guest_events,back_populates="guests")
 
 class EventDB(Base):
     __tablename__ = "events"
@@ -24,9 +32,9 @@ class EventDB(Base):
     venue = Column(String, nullable=False)
     description = Column(String, nullable=False)
     status = Column(String, nullable=False)
-    expenses = relationship("ExpenseDB",back_populates="event")
-
-Base.metadata.create_all(bind=engine)
+    expenses = relationship("ExpenseDB",back_populates="event",cascade="all, delete-orphan")
+    guests = relationship("GuestDB",secondary=guest_events,back_populates="events")
+    vendor_assignments = relationship("VendorEventDB",back_populates="event",cascade="all, delete-orphan")
 
 class VendorDB(Base):
     __tablename__ = "vendors"
@@ -37,8 +45,7 @@ class VendorDB(Base):
     contact_info = Column(String, nullable=False)
     cost = Column(Float, nullable=False)
     status = Column(String, nullable=False)
-
-Base.metadata.create_all(bind=engine)
+    event_assignments = relationship("VendorEventDB",back_populates="vendor",cascade="all, delete-orphan")
 
 
 class ExpenseDB(Base):
@@ -52,6 +59,23 @@ class ExpenseDB(Base):
     status = Column(String, nullable=False)
     event_id = Column(Integer, ForeignKey("events.id"), nullable=False)
     event = relationship("EventDB", back_populates="expenses")
+
+
+
+class VendorEventDB(Base):
+    __tablename__ = "vendor_events"
+
+    __table_args__ = (UniqueConstraint("vendor_id","event_id",name="uq_vendor_event"),)
+    id = Column(Integer, primary_key=True, index=True)
+
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=False)
+
+    cost = Column(Float, nullable=False)
+
+    vendor = relationship("VendorDB", back_populates="event_assignments")
+    event = relationship("EventDB", back_populates="vendor_assignments")
+
 
 
 Base.metadata.create_all(bind=engine)

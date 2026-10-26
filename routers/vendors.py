@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import VendorDB
-from schemas import Vendor, VendorResponse
+from models import VendorDB, EventDB, VendorEventDB
+from schemas import EventResponse, Vendor, VendorAssignmentResponse, VendorResponse, VendorEventCreate, VendorEventCostUpdate, EventVendorResponse
 
 router = APIRouter(
     prefix="/vendors",
@@ -25,6 +25,58 @@ def create_vendor(vendor: Vendor, db: Session = Depends(get_db)):
     db.refresh(vendor_db)
     return vendor_db
 
+@router.post("/assign-event")
+def assign_vendor_to_event(
+    data: VendorEventCreate,
+    db: Session = Depends(get_db)
+):
+    vendor = db.query(VendorDB).filter(
+        VendorDB.id == data.vendor_id
+    ).first()
+
+    if not vendor:
+        raise HTTPException(
+            status_code=404,
+            detail="Vendor not found"
+        )
+
+    event = db.query(EventDB).filter(
+        EventDB.id == data.event_id
+    ).first()
+
+    if not event:
+        raise HTTPException(
+            status_code=404,
+            detail="Event not found"
+        )
+
+    existing = db.query(VendorEventDB).filter(VendorEventDB.vendor_id == data.vendor_id,VendorEventDB.event_id == data.event_id).first()
+    
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="Vendor is already assigned to this event"
+        )
+
+    assignment = VendorEventDB(
+        vendor_id=data.vendor_id,
+        event_id=data.event_id,
+        cost=data.cost
+    )
+
+    db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+
+    return {
+        "message": "Vendor assigned successfully",
+        "assignment_id": assignment.id,
+        "vendor_id": assignment.vendor_id,
+        "event_id": assignment.event_id,
+        "cost": assignment.cost
+    }
+
+
 @router.get("/", status_code=200, response_model=list[VendorResponse])
 def get_vendors(service_type: str | None = None, db: Session = Depends(get_db)):
     query = db.query(VendorDB)
@@ -45,6 +97,59 @@ def get_single_vendor(vendor_id: int, db: Session = Depends(get_db)):
         )
     return vendor
 
+@router.get("/events/{event_id}/vendors", response_model=list[EventVendorResponse])
+def get_event_vendors(
+    event_id: int,
+    db: Session = Depends(get_db)
+):
+    event = db.query(EventDB).filter(EventDB.id == event_id).first()
+    if not event:
+        raise HTTPException(
+            status_code=404,
+            detail="Event not found"
+        )
+
+    assignments = db.query(VendorEventDB).filter(VendorEventDB.event_id == event_id).all()
+
+    return [
+        {
+            "vendor_id": assignment.vendor.id,
+            "vendor_name": assignment.vendor.vendor_name,
+            "service_type": assignment.vendor.service_type,
+            "cost": assignment.cost
+        }
+        for assignment in assignments
+    ]
+
+
+@router.put("/assignments/{assignment_id}/cost",response_model=VendorAssignmentResponse)
+def update_vendor_cost(
+    assignment_id: int,
+    data: VendorEventCostUpdate,
+    db: Session = Depends(get_db)
+):
+    assignment = db.query(VendorEventDB).filter(
+        VendorEventDB.id == assignment_id
+    ).first()
+
+    if not assignment:
+        raise HTTPException(
+            status_code=404,
+            detail="Vendor assignment not found"
+        )
+
+    assignment.cost = data.cost
+
+    db.commit()
+    db.refresh(assignment)
+
+    return {
+        "message": "Vendor cost updated successfully",
+        "assignment_id": assignment.id,
+        "vendor_id": assignment.vendor_id,
+        "event_id": assignment.event_id,
+        "cost": assignment.cost
+    }
 @router.put("/{vendor_id}", status_code=200, response_model=VendorResponse)
 def update_vendor(vendor_id: int, vendor: Vendor, db: Session = Depends(get_db)):
     vendor_db = db.query(VendorDB).filter(VendorDB.id == vendor_id).first()
@@ -74,3 +179,25 @@ def delete_vendor(vendor_id: int, db: Session = Depends(get_db)):
     
     db.delete(vendor_db)
     db.commit()
+
+@router.delete("/assignments/{assignment_id}")
+def delete_vendor_assignment(
+    assignment_id: int,
+    db: Session = Depends(get_db)
+):
+    assignment = db.query(VendorEventDB).filter(
+        VendorEventDB.id == assignment_id
+    ).first()
+
+    if not assignment:
+        raise HTTPException(
+            status_code=404,
+            detail="Vendor assignment not found"
+        )
+
+    db.delete(assignment)
+    db.commit()
+
+    return {
+        "message": "Vendor assignment deleted successfully"
+    }

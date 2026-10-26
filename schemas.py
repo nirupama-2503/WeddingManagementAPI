@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Column, Integer, String, Float
 from sqlalchemy.orm import declarative_base
 
@@ -43,14 +43,35 @@ class VendorResponse(Vendor):
 
     model_config = ConfigDict(from_attributes=True)
 
+class VendorEventCreate(BaseModel):
+    vendor_id: int
+    event_id: int
+    cost: float = Field(ge=0)
+
+class VendorEventCostUpdate(BaseModel):
+    cost: float = Field(ge=0)
+
+class VendorAssignmentResponse(BaseModel):
+    message: str
+    assignment_id: int
+    vendor_id: int
+    event_id: int
+    cost: float
+
+class EventVendorResponse(BaseModel):
+    vendor_id: int
+    vendor_name: str
+    service_type: str
+    cost: float
+
 
 class Expense(BaseModel):
     purpose: str
-    amount: float   
+    amount: float = Field(gt=0, description="Amount must be greater than zero")
     category: str
     date: str
     status: str
-    event_id: int
+    event_id: int = Field(gt=0, description="Event ID must be greater than zero")
 
 class ExpenseResponse(Expense):
     id: int

@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import EventDB
-from schemas import Event, EventResponse, EventStatusUpdate
+from models import EventDB, ExpenseDB, GuestDB, VendorDB
+from schemas import Event, EventResponse, EventStatusUpdate, ExpenseResponse
 
 router = APIRouter(
         prefix="/events",
@@ -25,6 +25,33 @@ def create_event(event: Event, db: Session = Depends(get_db)):
     db.refresh(event_db)
     return event_db
 
+@router.post("/vendors/{vendor_id}/events/{event_id}")
+def add_vendor_to_event(
+    vendor_id: int,
+    event_id: int,
+    db: Session = Depends(get_db)
+):
+    vendor = db.query(VendorDB).filter(VendorDB.id == vendor_id).first()
+    event = db.query(EventDB).filter(EventDB.id == event_id).first()
+
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if event in vendor.events:
+        raise HTTPException(
+        status_code=400,
+        detail="Vendor is already registered for this event"
+        )
+
+    vendor.events.append(event)
+
+    db.commit()
+
+    return {"message": "Vendor added to event successfully"}
+
 @router.get("/",status_code=200,response_model=list[EventResponse])
 def get_events(status: str | None = None, db: Session = Depends(get_db)):
     query = db.query(EventDB)
@@ -43,6 +70,48 @@ def get_single_event(event_id: int, db: Session = Depends(get_db)):
             detail="Event not found"
         )
     return event
+
+@router.get("/{event_id}/expenses", status_code=200, response_model=list[ExpenseResponse])
+def get_event_expenses(event_id: int, db: Session = Depends(get_db)):
+    event = db.query(EventDB).filter(EventDB.id==event_id).first()
+    if event is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Event not found"
+        )
+
+    return event.expenses
+
+@router.get("/{event_id}/guests")
+def get_event_guests(
+    event_id: int,
+    db: Session = Depends(get_db)
+):
+    event = db.query(EventDB).filter(EventDB.id == event_id).first()
+
+    if not event:
+        raise HTTPException(
+            status_code=404,
+            detail="Event not found"
+        )
+
+    return event.guests
+
+@router.get("/{event_id}/vendors")
+def get_event_vendors(
+    event_id: int,
+    db: Session = Depends(get_db)
+):
+    event = db.query(EventDB).filter(EventDB.id == event_id).first()
+
+    if not event:
+        raise HTTPException(
+            status_code=404,
+            detail="Event not found"
+        )
+
+    return event.vendors
+
 
 @router.put("/{event_id}", status_code=200, response_model=EventResponse)
 def update_event(event_id: int, event: Event, db: Session = Depends(get_db)):

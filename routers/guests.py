@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import GuestDB
+from models import GuestDB, EventDB
 from schemas import Guest, GuestResponse
 
 router = APIRouter(
@@ -27,6 +27,33 @@ def create_guest(guest: Guest, db: Session = Depends(get_db)):
     db.refresh(guest_db)
     return guest_db
 
+@router.post("/{guest_id}/events/{event_id}")
+def add_guest_to_event(
+    guest_id: int,
+    event_id: int,
+    db: Session = Depends(get_db)
+):
+    guest = db.query(GuestDB).filter(GuestDB.id == guest_id).first()
+    event = db.query(EventDB).filter(EventDB.id == event_id).first()
+
+    if not guest:
+        raise HTTPException(status_code=404, detail="Guest not found")
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if event in guest.events:
+        raise HTTPException(
+        status_code=400,
+        detail="Guest is already registered for this event"
+        )
+
+    guest.events.append(event)
+
+    db.commit()
+
+    return {"message": "Guest added to event successfully"}
+
 @router.get("/{guest_id}", response_model=GuestResponse)
 def get_single_guest(guest_id: int, db: Session = Depends(get_db)):
     guest = db.query(GuestDB).filter(GuestDB.id == guest_id).first()
@@ -36,6 +63,18 @@ def get_single_guest(guest_id: int, db: Session = Depends(get_db)):
             detail="Guest not found"
         )
     return guest
+
+@router.get("/{guest_id}/events")
+def get_guest_events(guest_id: int,db: Session = Depends(get_db)):
+    guest = db.query(GuestDB).filter(GuestDB.id == guest_id).first()
+
+    if not guest:
+        raise HTTPException(
+            status_code=404,
+            detail="Guest not found"
+        )
+
+    return guest.events
 
 @router.put("/{guest_id}", response_model=GuestResponse)
 def update_guest(guest_id: int, guest: Guest, db: Session = Depends(get_db)):
