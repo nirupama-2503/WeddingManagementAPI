@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta, timezone
-import os
+from config import settings
 import jwt
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from database import get_db
@@ -12,14 +12,6 @@ from security import hash_password, verify_password
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-
-if not SECRET_KEY:
-    raise RuntimeError("JWT_SECRET_KEY environment variable is not set")
-
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/auth/login"
 )
@@ -28,16 +20,16 @@ def create_access_token(data: dict) -> str:
     to_encode = data.copy()
 
     expire = datetime.now(timezone.utc) + timedelta(
-        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
-    )
+    minutes=settings.access_token_expire_minutes
+)
 
     to_encode.update({"exp": expire})
 
     encoded_jwt = jwt.encode(
-        to_encode,
-        SECRET_KEY,
-        algorithm=ALGORITHM
-    )
+    to_encode,
+    settings.jwt_secret_key,
+    algorithm=settings.algorithm
+)
 
     return encoded_jwt
 
@@ -57,8 +49,8 @@ def get_current_user(
     try:
         payload = jwt.decode(
             token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM]
+            settings.jwt_secret_key,
+            algorithms=[settings.algorithm]
         )
 
         user_id = payload.get("sub")

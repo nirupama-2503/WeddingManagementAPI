@@ -8,7 +8,7 @@ from routers.auth import get_current_user, require_admin
 from schemas import Expense, ExpenseResponse, ExpensetotalResponse
 
 router = APIRouter(
-    prefix="/expense",
+    prefix="/expenses",
     tags=["Expenses"]
 )
 
@@ -45,6 +45,11 @@ def create_expense(
 def get_expenses(db: Session = Depends(get_db)):
     expenses = db.query(ExpenseDB).all()
     return expenses
+
+@router.get("/total", status_code=200, response_model=ExpensetotalResponse)
+def get_total_expenses(db: Session = Depends(get_db)):
+    total_expenses = db.query(func.sum(ExpenseDB.amount)).scalar()
+    return {"total_expenses": total_expenses}
 
 @router.get("/{expense_id}", status_code=200, response_model=ExpenseResponse)
 def get_single_expense(expense_id: int, db: Session = Depends(get_db)):
@@ -84,7 +89,7 @@ def update_expense(
 def delete_expense(
     expense_id: int,
     db: Session = Depends(get_db),
-    current_user: UserDB = Depends(require_admin)
+    current_user: UserDB = Depends(get_current_user)
 ):
     expense_db = db.query(ExpenseDB).filter(ExpenseDB.id == expense_id).first()
     if expense_db is None:
@@ -95,9 +100,3 @@ def delete_expense(
     
     db.delete(expense_db)
     db.commit()
-
-
-@router.get("/total", status_code=200, response_model=ExpensetotalResponse)
-def get_total_expenses(db: Session = Depends(get_db)):
-    total_expenses = db.query(func.sum(ExpenseDB.amount)).scalar()
-    return {"total_expenses": total_expenses}
