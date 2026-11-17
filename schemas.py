@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, EmailStr
 from sqlalchemy import Column, Integer, String, Float
 from sqlalchemy.orm import declarative_base
 
@@ -84,3 +84,30 @@ class ExpensetotalResponse(BaseModel):
 
 class EventStatusUpdate(BaseModel):
     status : str
+
+class UserCreate(BaseModel):
+    username: str = Field(min_length=3, max_length=50)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: EmailStr
+    role: str
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class UserRoleUpdate(BaseModel):
+    role: str = Field(pattern="^(admin|user)$")
+
+class UserStatusUpdate(BaseModel):
+    is_active: bool

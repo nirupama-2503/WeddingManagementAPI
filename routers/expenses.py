@@ -3,7 +3,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import EventDB, ExpenseDB
+from models import EventDB, ExpenseDB, UserDB
+from routers.auth import get_current_user, require_admin
 from schemas import Expense, ExpenseResponse, ExpensetotalResponse
 
 router = APIRouter(
@@ -12,7 +13,11 @@ router = APIRouter(
 )
 
 @router.post("/", status_code=201, response_model=ExpenseResponse)
-def create_expense(expense: Expense, db: Session = Depends(get_db)):
+def create_expense(
+    expense: Expense,
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user)
+):
     expense_db = ExpenseDB(
         purpose=expense.purpose,
         amount=expense.amount,
@@ -53,7 +58,12 @@ def get_single_expense(expense_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{expense_id}", status_code=200, response_model=ExpenseResponse)
-def update_expense(expense_id: int, expense: Expense, db: Session = Depends(get_db)):
+def update_expense(
+    expense_id: int,
+    expense: Expense,
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user)
+):
     expense_db = db.query(ExpenseDB).filter(ExpenseDB.id == expense_id).first()
     if expense_db is None:
         raise HTTPException(
@@ -71,7 +81,11 @@ def update_expense(expense_id: int, expense: Expense, db: Session = Depends(get_
     return expense_db
 
 @router.delete("/{expense_id}", status_code=204)
-def delete_expense(expense_id: int, db: Session = Depends(get_db)):
+def delete_expense(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(require_admin)
+):
     expense_db = db.query(ExpenseDB).filter(ExpenseDB.id == expense_id).first()
     if expense_db is None:
         raise HTTPException(

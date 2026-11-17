@@ -1,7 +1,7 @@
 
 
 from database import Base, engine, get_db
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Table, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Table, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 
@@ -77,5 +77,14 @@ class VendorEventDB(Base):
     event = relationship("EventDB", back_populates="vendor_assignments")
 
 
+class UserDB(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, default="user", nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
 
 Base.metadata.create_all(bind=engine)

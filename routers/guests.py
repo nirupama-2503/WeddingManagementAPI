@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import GuestDB, EventDB
+from models import GuestDB, EventDB, UserDB
 from schemas import Guest, GuestResponse
+from routers.auth import get_current_user, require_admin
 
 router = APIRouter(
     prefix="/guest",
@@ -16,7 +17,11 @@ def get_guests(db: Session = Depends(get_db)):
     return guests
 
 @router.post("/", status_code=201, response_model=GuestResponse)
-def create_guest(guest: Guest, db: Session = Depends(get_db)):
+def create_guest(
+    guest: Guest,
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user)
+):
     guest_db = GuestDB(
         name=guest.name,
         age=guest.age,
@@ -31,7 +36,8 @@ def create_guest(guest: Guest, db: Session = Depends(get_db)):
 def add_guest_to_event(
     guest_id: int,
     event_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user)
 ):
     guest = db.query(GuestDB).filter(GuestDB.id == guest_id).first()
     event = db.query(EventDB).filter(EventDB.id == event_id).first()
@@ -77,7 +83,12 @@ def get_guest_events(guest_id: int,db: Session = Depends(get_db)):
     return guest.events
 
 @router.put("/{guest_id}", response_model=GuestResponse)
-def update_guest(guest_id: int, guest: Guest, db: Session = Depends(get_db)):
+def update_guest(
+    guest_id: int,
+    guest: Guest,
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user)
+):
     guest_db = db.query(GuestDB).filter(GuestDB.id == guest_id).first()
     if guest_db is None:
         raise HTTPException(
@@ -92,7 +103,11 @@ def update_guest(guest_id: int, guest: Guest, db: Session = Depends(get_db)):
     return guest_db
 
 @router.delete("/{guest_id}", status_code=204)
-def delete_guest(guest_id: int, db: Session = Depends(get_db)):
+def delete_guest(
+    guest_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(require_admin)
+):
     guest_db = db.query(GuestDB).filter(GuestDB.id == guest_id).first()
     if guest_db is None:
         raise HTTPException(

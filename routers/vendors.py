@@ -1,9 +1,12 @@
+from sqlalchemy.exc import IntegrityError
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import VendorDB, EventDB, VendorEventDB
-from schemas import EventResponse, Vendor, VendorAssignmentResponse, VendorResponse, VendorEventCreate, VendorEventCostUpdate, EventVendorResponse
+from models import VendorDB, EventDB, VendorEventDB, UserDB
+from schemas import Vendor, VendorAssignmentResponse, VendorResponse, VendorEventCreate, VendorEventCostUpdate, EventVendorResponse
+from routers.auth import get_current_user, require_admin
 
 router = APIRouter(
     prefix="/vendors",
@@ -11,7 +14,11 @@ router = APIRouter(
 )
 
 @router.post("/", status_code=201, response_model=VendorResponse)
-def create_vendor(vendor: Vendor, db: Session = Depends(get_db)):
+def create_vendor(
+    vendor: Vendor,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db)
+    ):
     vendor_db = VendorDB(
         vendor_name=vendor.vendor_name,
         service_type=vendor.service_type,
@@ -28,7 +35,8 @@ def create_vendor(vendor: Vendor, db: Session = Depends(get_db)):
 @router.post("/assign-event")
 def assign_vendor_to_event(
     data: VendorEventCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user)
 ):
     vendor = db.query(VendorDB).filter(
         VendorDB.id == data.vendor_id
@@ -51,7 +59,7 @@ def assign_vendor_to_event(
         )
 
     existing = db.query(VendorEventDB).filter(VendorEventDB.vendor_id == data.vendor_id,VendorEventDB.event_id == data.event_id).first()
-    
+
     if existing:
         raise HTTPException(
             status_code=400,
@@ -65,8 +73,15 @@ def assign_vendor_to_event(
     )
 
     db.add(assignment)
-    db.commit()
-    db.refresh(assignment)
+    try:
+        db.commit()
+        db.refresh(assignment)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+        status_code=409,
+        detail="Vendor is already assigned to this event"
+    )
 
     return {
         "message": "Vendor assigned successfully",
@@ -85,10 +100,13 @@ def get_vendors(service_type: str | None = None, db: Session = Depends(get_db)):
         query = query.filter(VendorDB.service_type == service_type)
 
     vendors = query.all()
-    return vendors      
+    return vendors
 
 @router.get("/{vendor_id}", status_code=200, response_model=VendorResponse)
-def get_single_vendor(vendor_id: int, db: Session = Depends(get_db)):   
+def get_single_vendor(
+    vendor_id: int,
+    db: Session = Depends(get_db)
+    ):
     vendor = db.query(VendorDB).filter(VendorDB.id == vendor_id).first()
     if vendor is None:
         raise HTTPException(
@@ -100,7 +118,7 @@ def get_single_vendor(vendor_id: int, db: Session = Depends(get_db)):
 @router.get("/events/{event_id}/vendors", response_model=list[EventVendorResponse])
 def get_event_vendors(
     event_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     event = db.query(EventDB).filter(EventDB.id == event_id).first()
     if not event:
@@ -126,7 +144,8 @@ def get_event_vendors(
 def update_vendor_cost(
     assignment_id: int,
     data: VendorEventCostUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user)
 ):
     assignment = db.query(VendorEventDB).filter(
         VendorEventDB.id == assignment_id
@@ -150,8 +169,15 @@ def update_vendor_cost(
         "event_id": assignment.event_id,
         "cost": assignment.cost
     }
+
+
 @router.put("/{vendor_id}", status_code=200, response_model=VendorResponse)
-def update_vendor(vendor_id: int, vendor: Vendor, db: Session = Depends(get_db)):
+def update_vendor(
+    vendor_id: int,
+    vendor: Vendor,
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user)
+):
     vendor_db = db.query(VendorDB).filter(VendorDB.id == vendor_id).first()
     if vendor_db is None:
         raise HTTPException(
@@ -169,21 +195,26 @@ def update_vendor(vendor_id: int, vendor: Vendor, db: Session = Depends(get_db))
     return vendor_db
 
 @router.delete("/{vendor_id}", status_code=204)
-def delete_vendor(vendor_id: int, db: Session = Depends(get_db)):   
+def delete_vendor(
+    vendor_id: int,
+    current_user: UserDB = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
     vendor_db = db.query(VendorDB).filter(VendorDB.id == vendor_id).first()
     if vendor_db is None:
         raise HTTPException(
             status_code=404,
             detail="Vendor not found"
         )
-    
+
     db.delete(vendor_db)
     db.commit()
 
 @router.delete("/assignments/{assignment_id}")
 def delete_vendor_assignment(
     assignment_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(require_admin)
 ):
     assignment = db.query(VendorEventDB).filter(
         VendorEventDB.id == assignment_id

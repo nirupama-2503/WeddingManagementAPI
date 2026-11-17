@@ -1,4 +1,13 @@
-__pychache__/
-*.pyc
+__pycache__/
+*.py[cod]
+
 wedding.db
+*.db
+
+.env
+.env.*
+
+.venv/
+venv/
+
 .vscode/
