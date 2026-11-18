@@ -22,6 +22,11 @@ The project demonstrates backend development concepts such as CRUD operations, r
 - Centralized application configuration
 - Environment variable management
 - Request processing time middleware
+- HTTP request logging (method, endpoint, status code, and processing time)
+- Application startup and shutdown logging
+- Router-level logging for authentication, events, and vendor operations
+- Exception logging with traceback information
+- File-based logging (`logs/app.log`)
 - CORS middleware
 - Automatic API documentation using Swagger UI
 
@@ -256,6 +261,5 @@ The database URL is configurable through environment variables. The default deve
 - Pagination, filtering, and sorting
 - Background tasks
 - File uploads
-- Logging and monitoring
 - Docker support
-- Deployment
+- Deployments
