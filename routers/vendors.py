@@ -7,6 +7,9 @@ from database import get_db
 from models import VendorDB, EventDB, VendorEventDB, UserDB
 from schemas import Vendor, VendorAssignmentResponse, VendorResponse, VendorEventCreate, VendorEventCostUpdate, EventVendorResponse
 from routers.auth import get_current_user, require_admin
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/vendors",
@@ -43,6 +46,10 @@ def assign_vendor_to_event(
     ).first()
 
     if not vendor:
+        logger.warning(
+            "Vendor not found: vendor_id=%s",
+            data.vendor_id
+        )
         raise HTTPException(
             status_code=404,
             detail="Vendor not found"
@@ -53,14 +60,26 @@ def assign_vendor_to_event(
     ).first()
 
     if not event:
+        logger.warning(
+            "Event not found: event_id=%s",
+            data.event_id
+        )
         raise HTTPException(
             status_code=404,
             detail="Event not found"
         )
 
-    existing = db.query(VendorEventDB).filter(VendorEventDB.vendor_id == data.vendor_id,VendorEventDB.event_id == data.event_id).first()
+    existing = db.query(VendorEventDB).filter(
+        VendorEventDB.vendor_id == data.vendor_id,
+        VendorEventDB.event_id == data.event_id
+    ).first()
 
     if existing:
+        logger.warning(
+            "Vendor already assigned: vendor_id=%s, event_id=%s",
+            data.vendor_id,
+            data.event_id
+        )
         raise HTTPException(
             status_code=400,
             detail="Vendor is already assigned to this event"
@@ -73,14 +92,29 @@ def assign_vendor_to_event(
     )
 
     db.add(assignment)
+
     try:
         db.commit()
         db.refresh(assignment)
+
     except IntegrityError:
         db.rollback()
+        logger.warning(
+            "Duplicate vendor assignment detected: vendor_id=%s, event_id=%s",
+            data.vendor_id,
+            data.event_id
+        )
         raise HTTPException(
-        status_code=409,
-        detail="Vendor is already assigned to this event"
+            status_code=409,
+            detail="Vendor is already assigned to this event"
+        )
+
+    logger.info(
+        "Vendor assigned successfully: assignment_id=%s, vendor_id=%s, event_id=%s, user_id=%s",
+        assignment.id,
+        assignment.vendor_id,
+        assignment.event_id,
+        current_user.id
     )
 
     return {
@@ -116,28 +150,56 @@ def get_single_vendor(
     return vendor
 
 @router.get("/events/{event_id}/vendors", response_model=list[EventVendorResponse])
+
 def get_event_vendors(
     event_id: int,
     db: Session = Depends(get_db),
 ):
-    event = db.query(EventDB).filter(EventDB.id == event_id).first()
-    if not event:
-        raise HTTPException(
-            status_code=404,
-            detail="Event not found"
+    try:
+        event = db.query(EventDB).filter(EventDB.id == event_id).first()
+
+        if not event:
+            logger.warning("Event not found: event_id=%s", event_id)
+            raise HTTPException(
+                status_code=404,
+                detail="Event not found"
+            )
+
+        assignments = (
+            db.query(VendorEventDB)
+            .filter(VendorEventDB.event_id == event_id)
+            .all()
         )
 
-    assignments = db.query(VendorEventDB).filter(VendorEventDB.event_id == event_id).all()
+        result = [
+            {
+                "vendor_id": assignment.vendor.id,
+                "vendor_name": assignment.vendor.vendor_name,
+                "service_type": assignment.vendor.service_type,
+                "cost": assignment.cost
+            }
+            for assignment in assignments
+        ]
 
-    return [
-        {
-            "vendor_id": assignment.vendor.id,
-            "vendor_name": assignment.vendor.vendor_name,
-            "service_type": assignment.vendor.service_type,
-            "cost": assignment.cost
-        }
-        for assignment in assignments
-    ]
+        logger.info(
+            "Retrieved %s vendors for event_id=%s",
+            len(result),
+            event_id
+        )
+
+        return result
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        logger.exception(
+            "Failed to retrieve vendors for event_id=%s",
+            event_id
+        )
+        raise
+
+
 
 
 @router.put("/assignments/{assignment_id}/cost",response_model=VendorAssignmentResponse)

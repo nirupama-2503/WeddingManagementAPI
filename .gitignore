@@ -12,3 +12,7 @@ wedding.db
 venv/
 
 .vscode/
+
+# Application logs
+logs/
+*.log

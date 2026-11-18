@@ -5,6 +5,9 @@ from database import get_db
 from models import EventDB, UserDB
 from schemas import Event, EventResponse, EventStatusUpdate, ExpenseResponse
 from routers.auth import get_current_user, require_admin
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
         prefix="/events",
@@ -17,7 +20,7 @@ def create_event(
     db: Session = Depends(get_db),
     current_user: UserDB = Depends(get_current_user)
 ):
-    event_db=EventDB(
+    event_db = EventDB(
         event_name=event.event_name,
         date=event.date,
         time=event.time,
@@ -25,11 +28,18 @@ def create_event(
         description=event.description,
         status=event.status
     )
+
     db.add(event_db)
     db.commit()
     db.refresh(event_db)
-    return event_db
 
+    logger.info(
+        "Event created successfully: event_id=%s, user_id=%s",
+        event_db.id,
+        current_user.id
+    )
+
+    return event_db
 
 @router.get("/",status_code=200,response_model=list[EventResponse])
 def get_events(status: str | None = None, db: Session = Depends(get_db)):
@@ -43,11 +53,17 @@ def get_events(status: str | None = None, db: Session = Depends(get_db)):
 @router.get("/{event_id}", status_code=200, response_model=EventResponse)
 def get_single_event(event_id: int, db: Session = Depends(get_db)):
     event = db.query(EventDB).filter(EventDB.id == event_id).first()
+
     if event is None:
+        logger.warning("Event not found: event_id=%s", event_id)
+
         raise HTTPException(
             status_code=404,
             detail="Event not found"
         )
+
+    logger.info("Event retrieved successfully: event_id=%s", event_id)
+
     return event
 
 @router.get("/{event_id}/expenses", status_code=200, response_model=list[ExpenseResponse])

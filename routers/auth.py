@@ -9,6 +9,9 @@ from database import get_db
 from models import UserDB
 from schemas import UserCreate, UserResponse, Token 
 from security import hash_password, verify_password
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -90,6 +93,7 @@ def require_admin(
 
     return current_user
 
+
 @router.post(
     "/register",
     response_model=UserResponse,
@@ -105,6 +109,8 @@ def register_user(
     ).first()
 
     if existing_user:
+        logger.warning("Registration failed: username or email already registered")
+
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Username or email already registered"
@@ -121,12 +127,17 @@ def register_user(
     try:
         db.commit()
         db.refresh(new_user)
+
     except IntegrityError:
         db.rollback()
+        logger.warning("Registration failed due to database integrity conflict")
+
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Username or email already registered"
         )
+
+    logger.info("User registered successfully: user_id=%s", new_user.id)
 
     return new_user
 
@@ -145,6 +156,8 @@ def login_user(
         form_data.password,
         user.hashed_password
     ):
+        logger.warning("Login failed: invalid credentials")
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
@@ -152,6 +165,8 @@ def login_user(
         )
 
     if not user.is_active:
+        logger.warning("Login failed: inactive user account, user_id=%s", user.id)
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive"
@@ -161,8 +176,9 @@ def login_user(
         {"sub": str(user.id)}
     )
 
+    logger.info("User login successful: user_id=%s", user.id)
+
     return {
         "access_token": access_token,
         "token_type": "bearer"
     }
-
